@@ -39,8 +39,6 @@ export function LiveLogStream({ height = 320, recordId }: { height?: number; rec
             setLogs(formattedLogs);
           }
         } else {
-          // Pas de recordId spécifié, on affiche les logs système récents
-          // Pour l'instant, on affiche un message indiquant de sélectionner une analyse
           setLogs([{
             ts: ts(),
             level: "info",
@@ -64,26 +62,20 @@ export function LiveLogStream({ height = 320, recordId }: { height?: number; rec
     fetchLogs();
   }, [recordId]);
 
-  // Gestion du streaming WebSocket
   useEffect(() => {
     if (!recordId) return;
 
-    // Connecter au WebSocket pour le streaming en temps réel
     logStreamClient.connect(recordId, (newLog) => {
-      // Formatter le log reçu du WebSocket
       const formattedLog: LogLine = {
         ts: new Date(newLog.timestamp).toLocaleTimeString(),
         level: (newLog.level?.toLowerCase() as LogLine["level"]) || "info",
         source: newLog.details?.analysis_type || "worker",
         message: newLog.message,
       };
-      
-      // Ajouter le nouveau log à la liste
+
       setLogs(prev => [...prev, formattedLog]);
       setIsStreaming(true);
     });
-
-    // Nettoyer la connexion WebSocket
     return () => {
       logStreamClient.disconnect();
       setIsStreaming(false);
@@ -100,7 +92,7 @@ export function LiveLogStream({ height = 320, recordId }: { height?: number; rec
       <div className="flex items-center justify-between border-b px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className={cn(
-            "h-2 w-2 rounded-full pulse-dot", 
+            "h-2 w-2 rounded-full pulse-dot",
             isLoading ? "bg-warning" : isStreaming ? "bg-success" : "bg-muted"
           )} />
           <p className="font-display text-xs font-medium uppercase tracking-wider">

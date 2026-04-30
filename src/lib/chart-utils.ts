@@ -1,88 +1,90 @@
-// Fonctions utilitaires pour générer des données de visualisation
-// Ces fonctions créent des données basées sur les résultats réels d'analyse
-
-export function makeRegressionPoints(results?: any) {
-  // Si nous avons des résultats réels, les utiliser, sinon générer des données par défaut
-  if (results && results.coefficients && results.feature_names) {
-    return results.feature_names.map((name: string, index: number) => ({
-      x: index,
-      actual: Math.random() * 100, // Simuler les valeurs réelles
-      predicted: Math.random() * 100,
-    }));
+export function makeRegressionPoints(results?: any, maxPoints = 500) {
+  if (results && results.predictions && results.actual_values) {
+    const total = results.predictions.length;
+    const step = Math.max(1, Math.floor(total / maxPoints));
+    
+    return results.predictions
+      .filter((_: any, i: number) => i % step === 0)
+      .slice(0, maxPoints)
+      .map((pred: number, index: number) => {
+        const originalIndex = index * step;
+        return {
+          x: originalIndex,
+          actual: results.actual_values[originalIndex],
+          predicted: pred,
+        };
+      });
   }
-  
-  // Données par défaut si pas de résultats
-  const pts: { x: number; actual: number; predicted: number }[] = [];
-  for (let i = 0; i < 24; i++) {
-    const x = i;
-    const trend = 50 + i * 6.4;
-    const actual = trend + (Math.sin(i * 1.3) * 18 + (i % 3) * 4);
-    const predicted = trend + Math.cos(i * 0.7) * 6;
-    pts.push({ x, actual: +actual.toFixed(1), predicted: +predicted.toFixed(1) });
-  }
-  return pts;
+  return [];
 }
 
-export function makeClusters(results?: any, k = 5) {
-  // Si nous avons des résultats réels de clustering, les utiliser
-  if (results && results.clusters) {
-    return results.clusters;
-  }
-  
-  // Générer des clusters par défaut
-  const centers = [
-    { x: -3, y: 2 },
-    { x: 4, y: 3 },
-    { x: 0, y: -3 },
-    { x: -4, y: -2 },
-    { x: 3, y: -1 },
-  ].slice(0, k);
-  const out: { x: number; y: number; cluster: number }[] = [];
-  centers.forEach((c, i) => {
-    for (let n = 0; n < 40; n++) {
-      out.push({
-        x: +(c.x + (Math.random() - 0.5) * 2.4).toFixed(2),
-        y: +(c.y + (Math.random() - 0.5) * 2.4).toFixed(2),
-        cluster: i,
+export function makeClusters(results?: any, k = 5, maxPoints = 500) {
+  if (results && results.reduced_data) {
+    const total = results.reduced_data.length;
+    const step = Math.max(1, Math.floor(total / maxPoints));
+
+    return results.reduced_data
+      .filter((_: any, i: number) => i % step === 0)
+      .slice(0, maxPoints)
+      .map((point: number[], index: number) => {
+        const originalIndex = index * step;
+        return {
+          x: point[0],
+          y: point[1],
+          cluster: results.predictions ? results.predictions[originalIndex] : 0,
+        };
       });
-    }
-  });
-  return out;
+  }
+  return [];
 }
 
 export function makeHistogram(results?: any) {
-  // Si nous avons des données réelles, les utiliser
-  if (results && results.histogram) {
-    return results.histogram;
+  if (results && results.actual_values) {
+    // Note: On utilise toutes les valeurs pour calculer les bins corrects,
+    // car le calcul d'histogramme n'est pas si lourd, c'est l'affichage SVG qui l'est (et l'histogramme n'affiche que 10 bins).
+    const values = results.actual_values;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const binCount = 10;
+    
+    // Éviter la division par zéro si min == max
+    const step = range === 0 ? 1 : range / binCount;
+
+    const bins = Array.from({ length: binCount }, (_, i) => {
+      const start = min + i * step;
+      const end = start + step;
+      return {
+        bin: `${start.toFixed(0)}-${end.toFixed(0)}`,
+        count: values.filter((v: number) => v >= start && (i === binCount - 1 ? v <= end : v < end)).length
+      };
+    });
+    return bins;
   }
-  
-  // Histogram par défaut
-  const bins = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-90", "90+"];
-  return bins.map((b, i) => ({
-    bin: b,
-    count: Math.round(40 + Math.sin(i / 1.5) * 30 + Math.random() * 20),
-  }));
+  return [];
 }
 
 export function makeFeatureImportance(results?: any) {
-  // Si nous avons des résultats réels, les utiliser
-  if (results && results.feature_importance) {
-    return results.feature_importance;
-  }
-  
   if (results && results.coefficients && results.feature_names) {
     return results.feature_names.map((name: string, index: number) => ({
       feature: name,
       value: Math.abs(results.coefficients[index] || 0),
-    }));
+    })).sort((a: any, b: any) => b.value - a.value);
   }
-  
-  // Données par défaut
-  return [
-    { feature: "feature_1", value: 0.34 },
-    { feature: "feature_2", value: 0.27 },
-    { feature: "feature_3", value: 0.19 },
-    { feature: "feature_4", value: 0.12 },
-    { feature: "feature_5", value: 0.08 },
-  ];
+  return [];
+}
+
+// Pour classification/supervised : distribution des classes prédites
+export function makeClassDistribution(results?: any) {
+  if (results && results.predictions && Array.isArray(results.predictions)) {
+    const counts: Record<string, number> = {};
+    for (const pred of results.predictions) {
+      const key = String(pred);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+  return [];
 }

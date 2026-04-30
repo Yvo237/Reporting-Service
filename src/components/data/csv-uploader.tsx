@@ -22,7 +22,7 @@ const SAMPLE_COLUMNS = [
   ["device_id", "ts", "temp", "humidity", "vibration"],
   ["age", "income", "debt", "score", "default"],
 ];
-export function CsvUploader({ onComplete, onUploadSuccess }: { 
+export function CsvUploader({ onComplete, onUploadSuccess }: {
   onComplete?: (f: UploadFile) => void;
   onUploadSuccess?: () => void;
 }) {
@@ -34,9 +34,8 @@ export function CsvUploader({ onComplete, onUploadSuccess }: {
     async (list: FileList | File[]) => {
       for (const file of Array.from(list)) {
         try {
-          // Parser le fichier CSV réel
           const parsed = await parseCSV(file);
-          
+
           const f: UploadFile = {
             name: file.name,
             size: file.size,
@@ -45,10 +44,9 @@ export function CsvUploader({ onComplete, onUploadSuccess }: {
             progress: 0,
             done: false,
           };
-          
+
           setFiles((prev) => [f, ...prev].slice(0, 5));
-          
-          // Simuler l'upload progressif
+
           let p = 0;
           const id = setInterval(() => {
             p += 8 + Math.random() * 12;
@@ -66,60 +64,18 @@ export function CsvUploader({ onComplete, onUploadSuccess }: {
               );
               onComplete?.(f);
               toast.success(`${file.name} parsed successfully: ${parsed.rows} rows, ${parsed.columns.length} columns`);
-              
-              // Envoyer le fichier au backend pour analyse (après la progression)
+
               (async () => {
                 try {
                   const formData = new FormData();
                   formData.append('file', file);
                   formData.append('user_id', 'test_user');
                   formData.append('dataset_name', file.name.replace('.csv', ''));
-                  formData.append('analysis_endpoint', 'regression/linear');
-                  // Détecter les colonnes numériques (vérifier plusieurs lignes)
-                  console.log('Colonnes disponibles:', parsed.columns);
-                  console.log('Premières lignes:', parsed.data.slice(0, 2));
-                  
-                  const numericColumns = parsed.columns.filter(col => {
-                    // Vérifier les 3 premières lignes pour s'assurer que la colonne est bien numérique
-                    const isNumeric = parsed.data.slice(0, 3).every(row => {
-                      const value = row?.[col];
-                      if (!value) return false;
-                      
-                      // Vérifier que c'est un nombre pur (pas de texte, pas de dates)
-                      const numValue = parseFloat(value);
-                      const isPureNumber = !isNaN(numValue) && 
-                                         isFinite(numValue) && 
-                                         !value.includes('-') && // Pas de dates (pas de tirets)
-                                         !value.includes(':') && // Pas de dates (pas de deux-points)
-                                         !isNaN(Number(value)) && // Conversion directe en nombre
-                                         value.trim() === numValue.toString(); // Pas de texte supplémentaire
-                      
-                      return isPureNumber;
-                    });
-                    console.log(`Colonne ${col}: ${isNumeric ? 'numérique' : 'non numérique'} (valeurs: ${parsed.data.slice(0, 2).map(r => r[col]).join(', ')})`);
-                    return isNumeric;
-                  });
-                  
-                  console.log('Colonnes numériques détectées:', numericColumns);
-                  
-                  // Utiliser la dernière colonne numérique comme Y et les autres comme X
-                  const yColumn = numericColumns[numericColumns.length - 1];
-                  const xColumns = numericColumns.slice(0, -1);
-                  
-                  if (numericColumns.length < 2) {
-                    console.error('Colonnes numériques insuffisantes:', numericColumns);
-                    throw new Error(`Le CSV doit contenir au moins 2 colonnes numériques pour la régression. Colonnes trouvées: ${numericColumns.join(', ')}`);
-                  }
-                  
-                  formData.append('params', JSON.stringify({
-                    x_columns: xColumns,
-                    y_column: yColumn
-                  }));
-                  
-                  const result = await collectionApi.uploadAndAnalyze(formData);
+
+                  const result = await collectionApi.uploadDataset(formData);
                   console.log('Upload successful:', result);
-                  toast.success(`${file.name} uploaded and analyzed successfully!`);
-                  onUploadSuccess?.(); // Rafraîchir les données
+                  toast.success(`${file.name} uploaded successfully!`);
+                  onUploadSuccess?.();
                 } catch (uploadError) {
                   console.error('Upload error:', uploadError);
                   toast.error(`Failed to upload ${file.name}: ${uploadError instanceof Error ? uploadError.message : 'Upload failed'}`);
@@ -127,7 +83,7 @@ export function CsvUploader({ onComplete, onUploadSuccess }: {
               })();
             }
           }, 300 + Math.random() * 200);
-          
+
         } catch (error) {
           console.error("Error parsing CSV:", error);
           toast.error(`Failed to parse ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -205,7 +161,7 @@ export function CsvUploader({ onComplete, onUploadSuccess }: {
 2024-01-01T10:02:00Z,dev003,22.8,46.1,idle
 2024-01-01T10:03:00Z,dev001,23.7,45.0,active
 2024-01-01T10:04:00Z,dev002,24.3,44.5,active`;
-                
+
                 const demoFile = new File([demoContent], "demo_iot_stream.csv", { type: "text/csv" });
                 ingest([demoFile]);
               }}

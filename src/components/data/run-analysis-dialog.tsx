@@ -67,7 +67,8 @@ export function RunAnalysisDialog({
   };
 
   const mutation = useMutation({
-    mutationFn: (formData: FormData) => collectionApi.uploadAndAnalyze(formData),
+    mutationFn: ({ id, formData }: { id: string; formData: FormData }) => 
+      collectionApi.runAnalysis(id, formData),
     onSuccess: () => {
       toast.success("Analysis queued", {
         id: "run",
@@ -90,8 +91,10 @@ export function RunAnalysisDialog({
   });
 
   const submit = async () => {
+    if (!dataset?.id) return;
+
     // Validation finale avant soumission
-    if (features.length === 0) {
+    if (features.length === 0 && type !== "kmeans" && type !== "pca") {
       toast.error("Please select at least one feature column", { id: "run" });
       return;
     }
@@ -105,7 +108,7 @@ export function RunAnalysisDialog({
     toast.loading("Dispatching to backend...", { id: "run" });
 
     const formData = new FormData();
-    formData.append("user_id", "user_123"); // Mock user_id pour l'instant
+    formData.append("user_id", "test_user");
     formData.append("dataset_name", dataset?.name || "unknown");
     
     // Le backend attend "analysis_endpoint"
@@ -126,51 +129,7 @@ export function RunAnalysisDialog({
 
     formData.append("params", JSON.stringify(apiParams));
     
-    // On crée un fichier CSV avec des données d'exemple basées sur les colonnes sélectionnées
-    let csvContent = "";
-    if (type === "linear_regression" && features.length > 0 && target) {
-      // Générer des données pour la régression linéaire
-      const headers = [...features, target].join(",");
-      csvContent = headers + "\n";
-      for (let i = 0; i < 10; i++) {
-        const xVal = i + 1;
-        const yVal = xVal * 2 + Math.random() * 2; // y = 2x + bruit
-        const row = features.map(() => xVal).concat(yVal).join(",");
-        csvContent += row + "\n";
-      }
-    } else if (type === "logistic_regression" || type === "random_forest") {
-      // Générer des données pour la classification
-      const headers = [...features, target].join(",");
-      csvContent = headers + "\n";
-      for (let i = 0; i < 10; i++) {
-        const row = features.map(() => Math.random() * 10).concat(i < 5 ? 0 : 1).join(",");
-        csvContent += row + "\n";
-      }
-    } else if (type === "pca") {
-      // Pour PCA, toujours générer des données numériques avec k+1 features minimum
-      const minFeatures = Math.max(k + 1, 3);
-      const allCols = Array.from({length: minFeatures}, (_, i) => `feature${i+1}`);
-      const headers = allCols.join(",");
-      csvContent = headers + "\n";
-      for (let i = 0; i < 10; i++) {
-        const row = allCols.map(() => Math.random() * 10).join(",");
-        csvContent += row + "\n";
-      }
-    } else if (type === "kmeans") {
-      // Pour clustering, toujours générer 3 features numériques minimum
-      const allCols = ["feature1", "feature2", "feature3"];
-      const headers = allCols.join(",");
-      csvContent = headers + "\n";
-      for (let i = 0; i < 10; i++) {
-        const row = allCols.map(() => Math.random() * 10).join(",");
-        csvContent += row + "\n";
-      }
-    }
-    
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    formData.append("file", blob, dataset?.name || "data.csv");
-
-    mutation.mutate(formData);
+    mutation.mutate({ id: dataset.id, formData });
   };
 
   const cols = dataset?.columns ?? [];

@@ -10,6 +10,7 @@ const STYLES: Record<string, string> = {
   success: "bg-success/15 text-success border-success/30",
   failed: "bg-destructive/15 text-destructive border-destructive/30",
   // Dataset
+  uploaded: "bg-muted text-muted-foreground border-border",
   collected: "bg-muted text-muted-foreground border-border",
   analyzing: "bg-info/15 text-info border-info/30",
   analyzed: "bg-accent/15 text-accent border-accent/30",

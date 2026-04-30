@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Brain, Download, Target, Zap, Loader2, Trash2, Database, Clock, Wifi, WifiOff } from "lucide-react";
+import { Brain, CheckCircle2, Database, Download, FlaskConical, History, Layout, Loader2, Play, Search, Target, Trash2 } from "lucide-react";
 import { logStreamClient } from "../lib/api-client";
 import {
   Bar,
@@ -27,6 +27,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { collectionApi } from "@/lib/api-client";
 import {
   makeClusters,
+  makeClassDistribution,
   makeFeatureImportance,
   makeHistogram,
   makeRegressionPoints,
@@ -47,13 +48,19 @@ export const Route = createFileRoute("/workbench")({
   component: Workbench,
 });
 
-const CLUSTER_COLORS = [
-  "oklch(0.72 0.18 240)",
-  "oklch(0.72 0.16 162)",
-  "oklch(0.79 0.16 75)",
-  "oklch(0.68 0.2 305)",
-  "oklch(0.7 0.2 20)",
+const CHART_COLORS = [
+  "#60a5fa",
+  "#34d399",
+  "#fbbf24",
+  "#f472b6",
+  "#a78bfa",
+  "#22d3ee",
+  "#fb923c",
+  "#4ade80",
+  "#e879f9",
+  "#facc15",
 ];
+const CLUSTER_COLORS = CHART_COLORS;
 
 function MetricChip({
   label,
@@ -85,11 +92,19 @@ function MetricChip({
 }
 
 function Workbench() {
-  const userId = "user_123"; // Stable user_id pour l'instant
-  const { data: analyses = [], isLoading, refetch } = useQuery({
+  const userId = "test_user";
+  const { data: rawAnalyses = [], isLoading, refetch } = useQuery({
     queryKey: ["analysis-history", userId],
     queryFn: () => collectionApi.getHistory(userId),
+    refetchInterval: (query) => {
+      const data = query.state?.data as any[];
+      return data?.some(a => a.status === 'processing') ? 3000 : 30000;
+    },
   });
+
+  const analyses = useMemo(() => {
+    return rawAnalyses.filter((a: any) => a.analysis_type !== null && a.analysis_type !== undefined);
+  }, [rawAnalyses]);
 
   const handleDeleteAnalysis = async (analysisId: number) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer cette analyse ?")) {
@@ -112,11 +127,23 @@ function Workbench() {
     return analyses.find((a: any) => a.id === selectedId) || analyses[0];
   }, [selectedId, analyses]);
 
-  // Adapter les données backend au format attendu par les graphiques (si nécessaire)
-  const clusters = useMemo(() => makeClusters(selected?.parameters?.n_clusters ?? 5), [selected]);
-  const reg = useMemo(() => makeRegressionPoints(), [selected]);
-  const hist = useMemo(() => makeHistogram(), [selected]);
-  const fi = useMemo(() => makeFeatureImportance(), [selected]);
+  const currentSelectedId = selected?.id;
+
+  const { data: fullResult } = useQuery({
+    queryKey: ["analysis-full-result", currentSelectedId],
+    queryFn: () => currentSelectedId ? collectionApi.getFullResult(currentSelectedId) : null,
+    enabled: !!currentSelectedId && (selected?.status === 'analyzed' || selected?.status === 'published' || selected?.status === 'premium'),
+  });
+
+  const chartData = fullResult || selected?.analysis_results;
+
+  const nClusters = selected?.analysis_parameters?.n_clusters ?? 5;
+
+  const clusters = useMemo(() => makeClusters(chartData, nClusters), [chartData, nClusters]);
+  const reg = useMemo(() => makeRegressionPoints(chartData), [chartData]);
+  const hist = useMemo(() => makeHistogram(chartData), [chartData]);
+  const fi = useMemo(() => makeFeatureImportance(chartData), [chartData]);
+  const classDistrib = useMemo(() => makeClassDistribution(chartData), [chartData]);
 
   if (isLoading) {
     return (
@@ -138,7 +165,6 @@ function Workbench() {
     );
   }
 
-  const currentSelectedId = selected?.id;
 
   return (
     <div className="grid grid-cols-1 gap-6 p-6 xl:grid-cols-[280px_1fr]">
@@ -243,10 +269,10 @@ function Workbench() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <StatusBadge status="success" />
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <StatusBadge status={selected.status || 'success'} />
+              <Button
+                variant="outline"
+                size="sm"
                 className="gap-1.5"
                 onClick={() => alert("Artifact download coming soon!")}
               >
@@ -310,44 +336,36 @@ function Workbench() {
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {selected.results?.r2 != null && (
+            {selected.analysis_results?.r_squared != null && (
               <>
-                <MetricChip label="R²" value={selected.results.r2.toFixed(3)} good hint="goodness of fit" />
-                <MetricChip label="MSE" value={selected.results.mse!.toFixed(1)} hint="mean squared error" />
+                <MetricChip label="R²" value={selected.analysis_results.r_squared.toFixed(3)} good hint="goodness of fit" />
+                <MetricChip label="MSE" value={selected.analysis_results.mse?.toFixed(1) || "—"} hint="mean squared error" />
                 <MetricChip label="Features" value={String(selected.parameters?.feature_columns?.length || selected.parameters?.x_columns?.length || 0)} />
                 <MetricChip label="Duration" value="—" />
               </>
             )}
-            {selected.results?.accuracy != null && (
+            {selected.analysis_results?.accuracy != null && (
               <>
-                <MetricChip label="Accuracy" value={`${(selected.results.accuracy * 100).toFixed(1)}%`} good />
-                <MetricChip label="F1 Score" value={selected.results.f1_score?.toFixed(3) || "—"} />
-                <MetricChip label="Precision" value={selected.results.precision?.toFixed(3) || "—"} />
-                <MetricChip label="Recall" value={selected.results.recall?.toFixed(3) || "—"} />
+                <MetricChip label="Accuracy" value={`${(selected.analysis_results.accuracy * 100).toFixed(1)}%`} good />
+                <MetricChip label="F1 Score" value={selected.analysis_results.f1_score?.toFixed(3) || "—"} />
+                <MetricChip label="Precision" value={selected.analysis_results.precision?.toFixed(3) || "—"} />
+                <MetricChip label="Recall" value={selected.analysis_results.recall?.toFixed(3) || "—"} />
               </>
             )}
-            {selected.parameters?.n_clusters != null && (
+            {(selected.analysis_type === "dimensionality/pca" || selected.analysis_type === "classification/unsupervised") && (
               <>
-                <MetricChip label="Clusters (k)" value={String(selected.parameters.n_clusters)} good />
+                <MetricChip label={selected.analysis_type === "dimensionality/pca" ? "Components" : "Clusters (k)"} value={String(selected.parameters?.n_clusters || selected.parameters?.n_components || 5)} good />
                 <MetricChip
                   label="Silhouette"
-                  value={(selected.results?.silhouette_score ?? 0.612).toFixed(3)}
+                  value={selected.analysis_results?.silhouette_score?.toFixed(3) || "—"}
                   hint="higher is better"
                 />
                 <MetricChip
                   label="Inertia"
-                  value={(selected.results?.inertia ?? 4231.5).toFixed(1)}
+                  value={selected.analysis_results?.inertia?.toFixed(1) || "—"}
                   hint="WCSS"
                 />
-                <MetricChip label="Features" value="—" />
-              </>
-            )}
-            {selected.analysis_type === "dimensionality/pca" && (
-              <>
-                <MetricChip label="Components" value={String(selected.parameters?.n_components || 2)} />
-                <MetricChip label="Var. explained" value="91%" good />
-                <MetricChip label="PC1" value="0.42" />
-                <MetricChip label="PC2" value="0.31" />
+                <MetricChip label="Features" value={String(selected.parameters?.feature_columns?.length || selected.parameters?.x_columns?.length || "—")} />
               </>
             )}
           </div>
@@ -367,60 +385,109 @@ function Workbench() {
                 ? "Predicted vs actual"
                 : selected.analysis_type === "dimensionality/pca" || selected.analysis_type === "classification/unsupervised"
                   ? "Cluster projection (PC1 × PC2)"
-                  : "Decision surface"}
+                  : selected.analysis_type === "classification/supervised"
+                    ? "Predicted class distribution"
+                    : "Decision surface"}
             </p>
-            <div className="mt-3 h-80">
+            <div className="mt-3 h-80 relative">
+              {selected.status !== 'analyzed' && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/60 backdrop-blur-[2px] rounded-lg border border-dashed">
+                  <div className={cn(
+                    "flex h-12 w-12 items-center justify-center rounded-full mb-3",
+                    selected.status === 'failed' ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
+                  )}>
+                    {selected.status === 'failed' ? <Trash2 className="h-6 w-6" /> : <Loader2 className="h-6 w-6 animate-spin" />}
+                  </div>
+                  <p className="font-display text-sm font-medium">
+                    {selected.status === 'failed' ? "Analysis Failed" : "Analysis in Progress"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground max-w-[280px] text-center">
+                    {selected.status === 'failed'
+                      ? "Check the error details above or the worker logs for more information."
+                      : "The background worker is currently processing your dataset. Visuals will appear shortly."}
+                  </p>
+                </div>
+              )}
               <ResponsiveContainer>
                 {selected.analysis_type === "regression/linear" ? (
                   <LineChart data={reg}>
-                    <CartesianGrid stroke="oklch(1 0 0 / 0.05)" vertical={false} />
-                    <XAxis dataKey="x" stroke="oklch(0.68 0.015 256)" fontSize={11} tickLine={false} />
-                    <YAxis stroke="oklch(0.68 0.015 256)" fontSize={11} tickLine={false} axisLine={false} />
+                    <CartesianGrid stroke="rgba(255,255,255,0.12)" vertical={false} />
+                    <XAxis dataKey="x" stroke="#94a3b8" tick={{ fill: "#cbd5e1", fontSize: 11 }} tickLine={false} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: "#cbd5e1", fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.205 0.014 256)",
-                        border: "1px solid oklch(0.28 0.016 256)",
+                        background: "#0f172a",
+                        border: "1px solid #60a5fa",
                         borderRadius: 8,
+                        color: "#f1f5f9"
                       }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line type="monotone" dataKey="actual" stroke="oklch(0.72 0.18 240)" strokeWidth={2} dot={{ r: 2 }} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: "#e2e8f0" }} />
+                    <Line type="monotone" dataKey="actual" stroke="#60a5fa" strokeWidth={2.5} dot={{ r: 2, fill: "#60a5fa" }} />
                     <Line
                       type="monotone"
                       dataKey="predicted"
-                      stroke="oklch(0.72 0.16 162)"
-                      strokeWidth={2}
-                      strokeDasharray="4 4"
+                      stroke="#fbbf24"
+                      strokeWidth={2.5}
+                      strokeDasharray="5 4"
                       dot={false}
                     />
                   </LineChart>
+                ) : selected.analysis_type === "classification/supervised" ? (
+                  <BarChart data={classDistrib} margin={{ top: 8, right: 16, left: 0, bottom: 40 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.12)" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      stroke="#94a3b8"
+                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
+                      tickLine={false}
+                      angle={-35}
+                      textAnchor="end"
+                    />
+                    <YAxis stroke="#94a3b8" tick={{ fill: "#cbd5e1", fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#0f172a",
+                        border: "1px solid #60a5fa",
+                        borderRadius: 8,
+                        color: "#f1f5f9"
+                      }}
+                      formatter={(v: any) => [v.toLocaleString(), "Samples"]}
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                      {classDistrib.map((_: any, i: number) => (
+                        <Cell key={i} fill={CLUSTER_COLORS[i % CLUSTER_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 ) : (
                   <ScatterChart>
-                    <CartesianGrid stroke="oklch(1 0 0 / 0.05)" />
+                    <CartesianGrid stroke="rgba(255,255,255,0.12)" />
                     <XAxis
                       type="number"
                       dataKey="x"
                       name="PC1"
-                      stroke="oklch(0.68 0.015 256)"
-                      fontSize={11}
+                      stroke="#94a3b8"
+                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
                     />
                     <YAxis
                       type="number"
                       dataKey="y"
                       name="PC2"
-                      stroke="oklch(0.68 0.015 256)"
-                      fontSize={11}
+                      stroke="#94a3b8"
+                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
                     />
                     <ZAxis range={[40, 80]} />
                     <Tooltip
-                      cursor={{ strokeDasharray: "3 3" }}
+                      cursor={{ stroke: "#60a5fa", strokeDasharray: "3 3" }}
                       contentStyle={{
-                        background: "oklch(0.205 0.014 256)",
-                        border: "1px solid oklch(0.28 0.016 256)",
+                        background: "#0f172a",
+                        border: "1px solid #60a5fa",
                         borderRadius: 8,
+                        color: "#f1f5f9"
                       }}
                     />
-                    {Array.from({ length: selected.k ?? 5 }).map((_, idx) => (
+                    {Array.from({ length: selected.parameters?.n_clusters ?? 5 }).map((_, idx) => (
                       <Scatter
                         key={idx}
                         name={`Cluster ${idx + 1}`}
@@ -439,35 +506,47 @@ function Workbench() {
               Top features
             </p>
             <div className="mt-3 h-80">
-              <ResponsiveContainer>
-                <BarChart data={fi} layout="vertical" margin={{ left: 30 }}>
-                  <CartesianGrid stroke="oklch(1 0 0 / 0.05)" horizontal={false} />
-                  <XAxis type="number" stroke="oklch(0.68 0.015 256)" fontSize={11} />
-                  <YAxis
-                    type="category"
-                    dataKey="feature"
-                    stroke="oklch(0.68 0.015 256)"
-                    fontSize={12}
-                    width={120}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.205 0.014 256)",
-                      border: "1px solid oklch(0.28 0.016 256)",
-                      borderRadius: 8,
-                    }}
-                  />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                    {fi.map((_, i) => (
-                      <Cell
-                        key={i}
-                        fill={CLUSTER_COLORS[i % CLUSTER_COLORS.length]}
-                        opacity={0.85}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {fi.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                  <div className="rounded-full bg-muted/50 p-4">
+                    <FlaskConical className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">No feature importance data</p>
+                  <p className="text-xs text-muted-foreground/70 max-w-xs">
+                    Feature importance is available for regression and supervised classification analyses.
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={fi} layout="vertical" margin={{ left: 30, right: 16, top: 4, bottom: 4 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.12)" horizontal={false} />
+                    <XAxis type="number" stroke="#94a3b8" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="feature"
+                      stroke="#94a3b8"
+                      tick={{ fill: "#e2e8f0", fontSize: 12 }}
+                      width={130}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#0f172a",
+                        border: "1px solid #60a5fa",
+                        borderRadius: 8,
+                        color: "#f1f5f9"
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                      {fi.map((_: any, i: number) => (
+                        <Cell
+                          key={i}
+                          fill={CHART_COLORS[i % CHART_COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </TabsContent>
 
@@ -476,21 +555,45 @@ function Workbench() {
               Target distribution
             </p>
             <div className="mt-3 h-80">
-              <ResponsiveContainer>
-                <BarChart data={hist}>
-                  <CartesianGrid stroke="oklch(1 0 0 / 0.05)" vertical={false} />
-                  <XAxis dataKey="bin" stroke="oklch(0.68 0.015 256)" fontSize={11} />
-                  <YAxis stroke="oklch(0.68 0.015 256)" fontSize={11} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.205 0.014 256)",
-                      border: "1px solid oklch(0.28 0.016 256)",
-                      borderRadius: 8,
-                    }}
-                  />
-                  <Bar dataKey="count" fill="oklch(0.72 0.18 240)" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {hist.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                  <div className="rounded-full bg-muted/50 p-4">
+                    <Layout className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">No distribution data</p>
+                  <p className="text-xs text-muted-foreground/70 max-w-xs">
+                    Distribution requires numeric actual values, available for regression analyses.
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hist} margin={{ right: 16, top: 4 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.12)" vertical={false} />
+                    <XAxis
+                      dataKey="bin"
+                      stroke="#94a3b8"
+                      tick={{ fill: "#cbd5e1", fontSize: 10 }}
+                      angle={-30}
+                      textAnchor="end"
+                      height={50}
+                    />
+                    <YAxis stroke="#94a3b8" tick={{ fill: "#cbd5e1", fontSize: 11 }} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#0f172a",
+                        border: "1px solid #60a5fa",
+                        borderRadius: 8,
+                        color: "#f1f5f9"
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                      {hist.map((_: any, i: number) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </TabsContent>
 

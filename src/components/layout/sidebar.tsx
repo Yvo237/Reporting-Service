@@ -75,9 +75,6 @@ export function Sidebar() {
             <span className="h-2 w-2 rounded-full bg-success pulse-dot text-success" />
             <p className="text-xs font-medium">All systems operational</p>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            3 services · 1 infra node 
-          </p>
         </div>
       </div>
     </aside>

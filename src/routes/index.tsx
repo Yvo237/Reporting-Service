@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   Activity,
   ArrowUpRight,
@@ -47,7 +48,8 @@ export const Route = createFileRoute("/")({
 
 function Overview() {
   const [userId] = useState("test_user");
-  
+  const [selectedLogId, setSelectedLogId] = useState<number | undefined>(undefined);
+
   const { data: healthData = {}, isLoading: servicesLoading } = useQuery({
     queryKey: ["service-health"],
     queryFn: collectionApi.getServiceHealth,
@@ -90,6 +92,23 @@ function Overview() {
     );
   }
 
+  const totalDatasetsCount = datasets.length;
+  const analysesLast24h = analyses.filter((a: any) => {
+    const createdAt = new Date(a.created_at || Date.now());
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return createdAt > yesterday;
+  }).length;
+
+  const totalAccuracy = analyses.reduce((sum: number, a: any) => {
+    const res = a.analysis_results;
+    if (!res) return sum;
+    return sum + (res.r_squared || res.accuracy || 0);
+  }, 0);
+  const avgAccuracy = analyses.length > 0 ? (totalAccuracy / analyses.length).toFixed(2) : "0.00";
+
+  const analysisService = services.find((s: any) => s.name === "Analysis Service");
+  const workerStatus = analysisService?.status === "online" ? "2 / 2" : "0 / 2";
+
   const onlineServices = services.filter((s: any) => s.status === "online").length;
   const totalRows = datasets.reduce((sum: number, d: any) => sum + (d.rows || 0), 0);
   const recentAnalyses = analyses.slice(0, 5);
@@ -108,7 +127,7 @@ function Overview() {
           <div>
             <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.2em] text-primary">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-success pulse-dot text-success" />
-              Operational · region eu-west-2
+              Operational
             </div>
             <h2 className="mt-2 max-w-xl font-display text-2xl font-semibold tracking-tight md:text-3xl">
               Your ML control plane is{" "}
@@ -140,22 +159,28 @@ function Overview() {
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Datasets ingested" value="1,284" delta={12} icon={Database} index={0} />
+        <MetricCard
+          label="Datasets ingested"
+          value={totalDatasetsCount.toLocaleString()}
+          delta={totalDatasetsCount > 0 ? 100 : 0}
+          icon={Database}
+          index={0}
+        />
         <MetricCard
           label="Analyses (24h)"
-          value="312"
-          delta={8}
+          value={analysesLast24h.toString()}
+          delta={analysesLast24h > 0 ? 100 : 0}
           icon={Brain}
           accent="accent"
           index={1}
         />
-        <MetricCard label="Avg accuracy" value="0.89" delta={3} icon={Zap} index={2} />
+        <MetricCard label="Avg accuracy" value={avgAccuracy} delta={Number(avgAccuracy) > 0.7 ? 5 : -2} icon={Zap} index={2} />
         <MetricCard
           label="Active workers"
-          value="14 / 16"
-          delta={-2}
+          value={workerStatus}
+          delta={0}
           icon={Server}
-          accent="warning"
+          accent={workerStatus.startsWith("0") ? "warning" : "accent"}
           index={3}
         />
       </div>
@@ -284,7 +309,7 @@ function Overview() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <LiveLogStream height={340} />
+          <LiveLogStream height={340} recordId={selectedLogId} />
         </div>
 
         <div className="rounded-xl border bg-card">
@@ -296,14 +321,21 @@ function Overview() {
               View all
             </Link>
           </div>
-          <ul className="divide-y">
+          <ul className="divide-y overflow-y-auto max-h-[340px]">
             {recentAnalyses.length === 0 ? (
               <li className="flex items-center justify-center px-4 py-8 text-muted-foreground">
                 Aucune analyse récente
               </li>
             ) : (
               recentAnalyses.map((a: any) => (
-                <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+                <li
+                  key={a.id}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50",
+                    selectedLogId === a.id && "bg-primary/5 border-l-2 border-primary"
+                  )}
+                  onClick={() => setSelectedLogId(a.id)}
+                >
                   <div className="flex h-8 w-8 items-center justify-center rounded-md border bg-muted text-muted-foreground">
                     <Brain className="h-4 w-4" />
                   </div>

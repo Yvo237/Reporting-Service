@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Database, Filter, Play, Search } from "lucide-react";
+import { Database, Filter, Play, Search, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,8 +50,19 @@ function DataHub() {
   const { data: datasets = [], isLoading, error, refetch } = useQuery({
     queryKey: ["datasets", userId],
     queryFn: () => collectionApi.getDatasets(userId),
-    refetchInterval: 30000, // Rafraîchir toutes les 30 secondes
+    refetchInterval: 3000,
   });
+
+  const handleDeleteDataset = async (id: string) => {
+    if (confirm("Are you sure you want to delete this dataset from the database? This action is permanent.")) {
+      try {
+        await collectionApi.deleteDataset(parseInt(id));
+        refetch();
+      } catch (error) {
+        console.error("Failed to delete dataset:", error);
+      }
+    }
+  };
 
   const filtered = useMemo(
     () =>
@@ -201,15 +212,28 @@ function DataHub() {
                     <StatusBadge status={d.status} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => open_(d)}
-                      className="gap-1.5 opacity-70 transition-opacity group-hover:opacity-100"
-                    >
-                      <Play className="h-3.5 w-3.5" />
-                      Run
-                    </Button>
+                    <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteDataset(d.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setActive(d);
+                          setOpen(true);
+                        }}
+                        className="gap-1.5"
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        Run
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

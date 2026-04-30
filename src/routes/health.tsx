@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { Activity, Cpu, Database, HardDrive, Server, Wifi } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { LiveLogStream } from "@/components/shared/live-log-stream";
@@ -31,10 +32,17 @@ const ICONS = {
 } as const;
 
 function Health() {
+  const [selectedLogId, setSelectedLogId] = useState<number | undefined>(undefined);
+
   const { data: healthData, isLoading, error } = useQuery({
     queryKey: ["service-health"],
     queryFn: collectionApi.getServiceHealth,
-    refetchInterval: 15000, // Rafraîchir toutes les 15 secondes
+    refetchInterval: 15000,
+  });
+
+  const { data: analyses = [] } = useQuery({
+    queryKey: ["analyses", "test_user"],
+    queryFn: () => collectionApi.getHistory("test_user"),
   });
 
   const services = healthData?.services || [];
@@ -141,7 +149,35 @@ function Health() {
         })}
       </div>
 
-      <LiveLogStream height={300} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <LiveLogStream height={300} recordId={selectedLogId} />
+        </div>
+        <div className="rounded-xl border bg-card p-5">
+          <h3 className="font-display text-xs font-medium uppercase tracking-wider mb-4">
+            Select Analysis Log
+          </h3>
+          <div className="space-y-2 max-h-[240px] overflow-y-auto pr-2">
+            {analyses.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No analyses found</p>
+            ) : (
+              analyses.map((a: any) => (
+                <div 
+                  key={a.id}
+                  onClick={() => setSelectedLogId(a.id)}
+                  className={cn(
+                    "p-2 rounded border cursor-pointer text-xs transition-colors hover:bg-muted",
+                    selectedLogId === a.id ? "border-primary bg-primary/5" : "border-border"
+                  )}
+                >
+                  <div className="font-medium truncate">{a.analysis_type}</div>
+                  <div className="text-muted-foreground truncate">{a.name}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

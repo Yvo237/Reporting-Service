@@ -8,8 +8,6 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Overview", subtitle: "Live status of pipelines, models, and infrastructure" },
   "/data": { title: "Data Hub", subtitle: "Ingest, validate, and orchestrate datasets" },
   "/workbench": { title: "ML Workbench", subtitle: "Inspect runs, metrics, and artifacts" },
-  "/kaggle": { title: "Kaggle Publisher", subtitle: "Push curated datasets to the community" },
-  "/notifications": { title: "Notification Center", subtitle: "Outbound email log & templates" },
   "/health": { title: "System Health", subtitle: "Microservices and infrastructure telemetry" },
 };
 
@@ -17,11 +15,10 @@ export function Topbar({ pathname }: { pathname: string }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const meta = TITLES[pathname] ?? TITLES["/"];
-  
+
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     if (query.trim()) {
-      // Rediriger vers la page de recherche ou filtrer les résultats
       navigate({ to: "/data", search: { q: query } });
     }
   };
@@ -56,9 +53,9 @@ export function Topbar({ pathname }: { pathname: string }) {
           </kbd>
         </div>
 
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="relative h-9 w-9"
           onClick={() => navigate({ to: "/notifications" })}
         >

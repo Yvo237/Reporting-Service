@@ -1,18 +1,13 @@
 services:
-  webapp:
+  reporting_service:
     build:
       context: ..
       dockerfile: Dockerfile
-      target: development
-    container_name: helix_webapp
-    ports:
-      - "8080:8080"
-    volumes:
-      - ../src:/app/src
-      - ../public:/app/public
-      - ../index.html:/app/index.html
-      - ../vite.config.ts:/app/vite.config.ts
-    environment:
-      - VITE_API_URL=http://localhost:8001
+      target: production
+      args:
+        VITE_API_URL: "/api"
+    container_name: reporting_service
+    expose:
+      - "80"
     networks:
       - analysis_network

@@ -16,7 +16,7 @@ export interface DatasetMetadata {
   sizeKb: number;
   uploadedAt: string;
   status: DatasetStatus;
-  source: "upload" | "kaggle" | "api";
+  source: "upload" | "api";
   owner: string;
 }
 
@@ -43,17 +43,6 @@ export interface AnalysisResult {
   // Generic
   features?: string[];
   target?: string;
-}
-
-export interface KagglePublication {
-  id: string;
-  datasetId: string;
-  datasetName: string;
-  kaggleSlug: string;
-  status: TaskStatus;
-  publishedAt: string;
-  downloads: number;
-  votes: number;
 }
 
 export interface NotificationLog {

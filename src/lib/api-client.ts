@@ -16,10 +16,7 @@ export const apiClient = axios.create({
   maxContentLength: 500 * 1024 * 1024, // 500MB max
   maxBodyLength: 500 * 1024 * 1024, // 500MB max
   // Forcer HTTPS et éviter les redirections HTTP
-  maxRedirects: 0,
-  httpsAgent: new (require('https').Agent)({
-    rejectUnauthorized: false // Accepter les certificats auto-signés
-  })
+  maxRedirects: 0
 });
 
 // Function to parse a CSV file natively

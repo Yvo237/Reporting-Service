@@ -132,7 +132,9 @@ function Workbench() {
   const { data: fullResult } = useQuery({
     queryKey: ["analysis-full-result", currentSelectedId],
     queryFn: () => currentSelectedId ? collectionApi.getFullResult(currentSelectedId) : null,
-    enabled: !!currentSelectedId && (selected?.status === 'analyzed' || selected?.status === 'published' || selected?.status === 'premium'),
+    enabled: !!currentSelectedId && 
+             (selected?.status === 'analyzed' || selected?.status === 'published' || selected?.status === 'premium') &&
+             !!selected?.results_path, // Uniquement si results_path existe
   });
 
   const chartData = fullResult || selected?.analysis_results;

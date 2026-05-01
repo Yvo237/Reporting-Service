@@ -8,15 +8,11 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "http://158.220.97.53/api/$1"
-    },
-    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
   ],
   "env": {
-    "VITE_API_URL": "/api"
+    "VITE_API_URL": "https://158.220.97.53/api"
   }
 }

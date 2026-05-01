@@ -10,6 +10,11 @@ export const apiClient = axios.create({
   timeout: 300000, // 5 minutes timeout pour les gros fichiers
   maxContentLength: 500 * 1024 * 1024, // 500MB max
   maxBodyLength: 500 * 1024 * 1024, // 500MB max
+  // Forcer HTTPS et éviter les redirections HTTP
+  maxRedirects: 0,
+  httpsAgent: new (require('https').Agent)({
+    rejectUnauthorized: false // Accepter les certificats auto-signés
+  })
 });
 
 // Function to parse a CSV file natively
